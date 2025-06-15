@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import axios from "axios";
 
-const baseApi = "http://localhost:7000/api"; // Your backend base URL
+const baseApi = "https://onetimeurl.onrender.com/api"; // Your backend base URL
 
 function App() {
   const [originalUrl, setOriginalUrl] = useState("");
