@@ -110,3 +110,12 @@ export const generateQRCode = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+
+export const healthCheck =(req,res)=>{
+  try {
+    res.status(200).json({message:"server is healthy"})
+  } catch (error) {
+     res.status(500).json({ error: "Server error" });
+  }
+}
