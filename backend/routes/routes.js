@@ -11,4 +11,4 @@ export const router = express();
 router.post("/url", createShortUrl);
 router.get("/:shortId", redirectToOriginal);
 router.get("/qrcode/:shortId", generateQRCode); 
-router.get('/health',healthCheck)
+router.get("/health",healthCheck)
