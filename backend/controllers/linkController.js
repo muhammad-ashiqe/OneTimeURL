@@ -1,6 +1,10 @@
 import QRCode from "qrcode";
 import { ShortUrl } from "../models/urlModel.js";
 import { v4 as uuidv4 } from "uuid";
+import fetch from "node-fetch";
+
+
+const { GA_MEASUREMENT_ID, GA_API_SECRET } = process.env;
 
 // In createShortUrl controller
 export const createShortUrl = async (req, res) => {
@@ -48,40 +52,41 @@ export const createShortUrl = async (req, res) => {
   }
 };
 
-// In redirectToOriginal controller
+// redirect controller
 export const redirectToOriginal = async (req, res) => {
   try {
     const { shortId } = req.params;
-    const url = await ShortUrl.findOne({ shortId });
+    const urlDoc = await ShortUrl.findOne({ shortId });
+    if (!urlDoc) return res.status(404).send("URL not found");
 
-    // res.json(url)
+    // Extract client_id from GA cookie or fallback to a UUID
+    const rawCookie = req.headers.cookie || "";
+    const match = rawCookie.match(/_ga=GA\d+\.\d+\.(\d+\.\d+)/);
+    const clientId = match ? match[1] : uuidv4();
 
-    if (!url) {
-      return res.status(404).send("URL not found");
-    }
-
-    // Check expiration
-    if (url.expiresAt && new Date() > url.expiresAt) {
-      return res.status(410).send("Link has expired");
-    }
-
-    // Handle one-click destruction
-    if (url.oneClickDestroy) {
-      if (url.clicked) {
-        return res.status(410).send("Link has been destroyed");
+    // Fire Measurement Protocol event for the click
+    fetch(
+      `https://www.google-analytics.com/mp/collect?measurement_id=${GA_MEASUREMENT_ID}&api_secret=${GA_API_SECRET}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: clientId,
+          events: [
+            {
+              name: "click_short_url",
+              params: { short_id: shortId }
+            }
+          ]
+        }),
       }
-      url.clicked = true;
-      await url.save();
-    }
+    ).catch(console.error);
 
-    // Track analytics in future
-    url.clicks++;
-    await url.save();
-
-    res.redirect(url.originalUrl);
+    // Now perform the redirect
+    return res.redirect(urlDoc.originalUrl);
   } catch (error) {
     console.error(error);
-    res.status(500).send("Server error");
+    return res.status(500).send("Server error");
   }
 };
 

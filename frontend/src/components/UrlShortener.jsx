@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import axios from "axios";
+import ReactGA from "react-ga4";
 
 const baseApi = "https://onetimeurl.onrender.com/api"; // Your backend base URL
 
@@ -32,38 +33,48 @@ function UrlShortner() {
     }
   }, [result, qrCode]);
 
-  const handleSubmit = async () => {
-    if (!originalUrl) {
-      alert("Please enter a URL");
-      return;
-    }
+const handleSubmit = async () => {
+  if (!originalUrl) {
+    alert("Please enter a URL");
+    return;
+  }
 
-    // URL validation using URL constructor
-    try {
-      new URL(originalUrl);
-    } catch (err) {
-      alert("Please enter a valid URL");
-      return;
-    }
+  // URL validation using URL constructor
+  try {
+    new URL(originalUrl);
+  } catch (err) {
+    alert("Please enter a valid URL");
+    return;
+  }
 
-    setLoading(true);
-    try {
-      const payload = {
-        originalUrl,
-        expiryOption,
-        customExpiryInDays: expiryOption === "custom" ? customDays : null,
-      };
+  setLoading(true);
+  try {
+    const payload = {
+      originalUrl,
+      expiryOption,
+      customExpiryInDays: expiryOption === "custom" ? customDays : null,
+    };
 
-      const { data } = await axios.post(`${baseApi}/url`, payload);
-      setResult(data);
-      fetchQRCode(data.shortUrl);
-    } catch (err) {
-      console.error("Error:", err);
-      alert("Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const { data } = await axios.post(`${baseApi}/url`, payload);
+
+    // 1️⃣ Update your UI state
+    setResult(data);
+    fetchQRCode(data.shortUrl);
+
+    // 2️⃣ Fire the GA event
+    ReactGA.event({
+      category: "ShortURL",
+      action: "Generate",
+      label: data.oneClickDestroy ? "one_click" : (data.expiresAt || "never")
+    });
+
+  } catch (err) {
+    console.error("Error:", err);
+    alert("Something went wrong");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchQRCode = async (shortUrl) => {
     const shortId = shortUrl.split("/").pop();
