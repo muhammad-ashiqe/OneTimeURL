@@ -3,10 +3,8 @@ import { ShortUrl } from "../models/urlModel.js";
 import { v4 as uuidv4 } from "uuid";
 import fetch from "node-fetch";
 
-
 const { GA_MEASUREMENT_ID, GA_API_SECRET } = process.env;
 
-// In createShortUrl controller
 export const createShortUrl = async (req, res) => {
   try {
     const { originalUrl, expiryOption, customExpiryInDays } = req.body;
@@ -25,9 +23,18 @@ export const createShortUrl = async (req, res) => {
       expiresAt.setDate(expiresAt.getDate() + days);
     }
 
-    const shortId = uuidv4().slice(0, 8); // 8-char ID
+    const shortId = uuidv4().slice(0, 8);
+    const baseUrl = process.env.BASE_URL;
+    const shortUrl = `${baseUrl}/${shortId}`;
 
-    
+    // Generate QR code
+    let qrCode = null;
+    try {
+      qrCode = await QRCode.toDataURL(shortUrl);
+    } catch (qrError) {
+      console.error("QR code generation failed:", qrError);
+    }
+
     const newUrl = new ShortUrl({
       originalUrl,
       shortId,
@@ -39,12 +46,11 @@ export const createShortUrl = async (req, res) => {
 
     await newUrl.save();
 
-    const baseUrl = process.env.BASE_URL;
-
     res.status(201).json({
-      shortUrl: `${baseUrl}/${shortId}`,
+      shortUrl,
       expiresAt,
       oneClickDestroy,
+      qrCode, // Send QR code in response
     });
   } catch (error) {
     console.error(error);
@@ -52,19 +58,28 @@ export const createShortUrl = async (req, res) => {
   }
 };
 
-// redirect controller
 export const redirectToOriginal = async (req, res) => {
   try {
     const { shortId } = req.params;
     const urlDoc = await ShortUrl.findOne({ shortId });
     if (!urlDoc) return res.status(404).send("URL not found");
 
-    // Extract client_id from GA cookie or fallback to a UUID
+    // Handle one-click destruction
+    if (urlDoc.oneClickDestroy && urlDoc.clicked) {
+      return res.status(410).send("This URL has been destroyed");
+    }
+
+    // Update clicked status
+    if (urlDoc.oneClickDestroy && !urlDoc.clicked) {
+      urlDoc.clicked = true;
+      await urlDoc.save();
+    }
+
+    // GA tracking
     const rawCookie = req.headers.cookie || "";
     const match = rawCookie.match(/_ga=GA\d+\.\d+\.(\d+\.\d+)/);
     const clientId = match ? match[1] : uuidv4();
 
-    // Fire Measurement Protocol event for the click
     fetch(
       `https://www.google-analytics.com/mp/collect?measurement_id=${GA_MEASUREMENT_ID}&api_secret=${GA_API_SECRET}`,
       {
@@ -82,7 +97,6 @@ export const redirectToOriginal = async (req, res) => {
       }
     ).catch(console.error);
 
-    // Now perform the redirect
     return res.redirect(urlDoc.originalUrl);
   } catch (error) {
     console.error(error);
@@ -90,37 +104,10 @@ export const redirectToOriginal = async (req, res) => {
   }
 };
 
-// Add to your existing controller
-export const generateQRCode = async (req, res) => {
+export const healthCheck = (req, res) => {
   try {
-    const { shortId } = req.params;
-    const url = await ShortUrl.findOne({ shortId });
-
-    if (!url) {
-      return res.status(404).json({ error: "URL not found" });
-    }
-
-    const baseUrl =
-      process.env.BASE_URL || `${req.protocol}://${req.get("host")}`;
-    const shortUrlGenerated = `${baseUrl}/${shortId}`;
-
-    const qrImage = await QRCode.toDataURL(shortUrlGenerated);
-
-    res.status(200).json({
-      qrCode: qrImage,
-      shortUrl: shortUrlGenerated,
-    });
+    res.status(200).json({ message: "server is healthy" });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: "Server error" });
   }
 };
-
-
-export const healthCheck =(req,res)=>{
-  try {
-    res.status(200).json({message:"server is healthy"})
-  } catch (error) {
-     res.status(500).json({ error: "Server error" });
-  }
-}

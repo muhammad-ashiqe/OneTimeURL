@@ -13,76 +13,65 @@ import {
 import axios from "axios";
 import ReactGA from "react-ga4";
 
-const baseApi = "https://onetimeurl.onrender.com/api"; // Your backend base URL
+const baseApi = "https://onetimeurl.onrender.com/api";
 
 function UrlShortner() {
   const [originalUrl, setOriginalUrl] = useState("");
   const [expiryOption, setExpiryOption] = useState("never");
   const [customDays, setCustomDays] = useState("");
   const [result, setResult] = useState(null);
-  const [qrCode, setQrCode] = useState(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   
   const resultRef = useRef(null);
 
-  // Auto-scroll to results when they become available
   useEffect(() => {
     if (result && resultRef.current) {
       resultRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [result, qrCode]);
+  }, [result]);
 
-const handleSubmit = async () => {
-  if (!originalUrl) {
-    alert("Please enter a URL");
-    return;
-  }
+  const handleSubmit = async () => {
+    if (!originalUrl) {
+      setError("Please enter a URL");
+      return;
+    }
 
-  // URL validation using URL constructor
-  try {
-    new URL(originalUrl);
-  } catch (err) {
-    alert("Please enter a valid URL");
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const payload = {
-      originalUrl,
-      expiryOption,
-      customExpiryInDays: expiryOption === "custom" ? customDays : null,
-    };
-
-    const { data } = await axios.post(`${baseApi}/url`, payload);
-
-    // 1️⃣ Update your UI state
-    setResult(data);
-    fetchQRCode(data.shortUrl);
-
-    // 2️⃣ Fire the GA event
-    ReactGA.event({
-      category: "ShortURL",
-      action: "Generate",
-      label: data.oneClickDestroy ? "one_click" : (data.expiresAt || "never")
-    });
-
-  } catch (err) {
-    console.error("Error:", err);
-    alert("Something went wrong");
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const fetchQRCode = async (shortUrl) => {
-    const shortId = shortUrl.split("/").pop();
     try {
-      const { data } = await axios.get(`${baseApi}/qrcode/${shortId}`);
-      setQrCode(data.qrCode); // base64 image
+      new URL(originalUrl);
     } catch (err) {
-      console.error("QR code error:", err);
+      setError("Please enter a valid URL");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    
+    try {
+      const payload = {
+        originalUrl,
+        expiryOption,
+        customExpiryInDays: expiryOption === "custom" ? customDays : null,
+      };
+
+      const { data } = await axios.post(`${baseApi}/url`, payload);
+
+      setResult(data);
+
+      ReactGA.event({
+        category: "ShortURL",
+        action: "Generate",
+        label: data.oneClickDestroy 
+          ? "one_click" 
+          : (data.expiresAt ? "expiring" : "never")
+      });
+
+    } catch (err) {
+      console.error("Error:", err);
+      setError("Failed to create short URL. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -93,25 +82,21 @@ const handleSubmit = async () => {
   };
 
   const downloadQRCode = () => {
+    if (!result.qrCode) return;
+    
     const link = document.createElement("a");
-    link.href = qrCode;
-
-    // Generate unique filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[-:.]/g, "");
-    const shortCode = result.shortUrl.split("/").pop();
-    link.download = `qrcode_${shortCode}_${timestamp}.png`;
-
+    link.href = result.qrCode;
+    link.download = `qrcode_${result.shortUrl.split("/").pop()}.png`;
     link.click();
   };
 
-  // Reset the entire form
   const clearForm = () => {
     setOriginalUrl("");
     setExpiryOption("never");
     setCustomDays("");
     setResult(null);
-    setQrCode(null);
     setCopied(false);
+    setError("");
   };
 
   return (
@@ -129,9 +114,7 @@ const handleSubmit = async () => {
       </div>
 
       <div className="relative z-10 w-full max-w-2xl">
-        {/* Header */}
         <div className="text-center mb-8">
-          {/*  */}
           <h3 className="text-4xl font-bold mb-4 text-orange-600">
             OneTimeURL
           </h3>
@@ -142,7 +125,7 @@ const handleSubmit = async () => {
 
         <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 p-8 shadow-2xl">
           <div className="space-y-6">
-            {/* Input */}
+            {/* URL Input */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
                 <Link className="w-4 h-4" />
@@ -228,6 +211,14 @@ const handleSubmit = async () => {
               </div>
             )}
 
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 bg-red-900/30 border border-red-700 rounded-xl text-red-300">
+                {error}
+              </div>
+            )}
+
+            {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={handleSubmit}
@@ -258,6 +249,7 @@ const handleSubmit = async () => {
             </div>
           </div>
 
+          {/* Result Section */}
           {result && (
             <div 
               className="mt-8 p-6 bg-gray-900/50 border border-gray-800 rounded-2xl shadow-inner"
@@ -268,6 +260,13 @@ const handleSubmit = async () => {
                   <Zap className="w-5 h-5 text-orange-600" />
                   Your Short URL is Ready!
                 </h3>
+                <p className="text-gray-400 text-sm">
+                  {result.oneClickDestroy 
+                    ? "This URL will be destroyed after first use" 
+                    : result.expiresAt
+                      ? `Expires on: ${new Date(result.expiresAt).toLocaleDateString()}`
+                      : "This URL will never expire"}
+                </p>
               </div>
 
               <div className="space-y-4">
@@ -302,14 +301,14 @@ const handleSubmit = async () => {
                 </div>
 
                 {/* QR Code */}
-                {qrCode && (
+                {result.qrCode && (
                   <div className="text-center">
                     <p className="text-gray-400 mb-3 font-medium">
                       Scan QR Code for quick access
                     </p>
                     <div className="inline-block p-4 bg-white rounded-xl">
                       <img
-                        src={qrCode}
+                        src={result.qrCode}
                         alt="QR Code"
                         className="w-40 h-40 rounded-lg"
                       />
