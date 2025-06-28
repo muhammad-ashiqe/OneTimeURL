@@ -86,7 +86,12 @@ function UrlShortner() {
     
     const link = document.createElement("a");
     link.href = result.qrCode;
-    link.download = `qrcode_${result.shortUrl.split("/").pop()}.png`;
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.-]/g, '');
+    const shortCode = result.shortUrl.split("/").pop();
+    link.download = `OneTimeURL-${shortCode}-${timestamp}.png`;
+    
     link.click();
   };
 
@@ -260,13 +265,26 @@ function UrlShortner() {
                   <Zap className="w-5 h-5 text-orange-600" />
                   Your Short URL is Ready!
                 </h3>
-                <p className="text-gray-400 text-sm">
-                  {result.oneClickDestroy 
-                    ? "This URL will be destroyed after first use" 
-                    : result.expiresAt
-                      ? `Expires on: ${new Date(result.expiresAt).toLocaleDateString()}`
-                      : "This URL will never expire"}
-                </p>
+                
+                {/* URL Status Badge */}
+                <div className="mt-2">
+                  {result.oneClickDestroy ? (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-900/30 text-orange-500">
+                      <MousePointer className="mr-1 w-4 h-4" />
+                      One-click destruction enabled
+                    </span>
+                  ) : result.expiresAt ? (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-900/30 text-blue-400">
+                      <Calendar className="mr-1 w-4 h-4" />
+                      Expires on: {new Date(result.expiresAt).toLocaleDateString()}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-900/30 text-green-400">
+                      <Infinity className="mr-1 w-4 h-4" />
+                      Never expires
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-4">

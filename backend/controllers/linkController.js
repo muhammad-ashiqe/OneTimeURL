@@ -64,15 +64,11 @@ export const redirectToOriginal = async (req, res) => {
     const urlDoc = await ShortUrl.findOne({ shortId });
     if (!urlDoc) return res.status(404).send("URL not found");
 
-    // Handle one-click destruction
-    if (urlDoc.oneClickDestroy && urlDoc.clicked) {
-      return res.status(410).send("This URL has been destroyed");
-    }
-
-    // Update clicked status
+    // Handle one-click destruction AFTER redirect
+    let shouldUpdate = false;
+    
     if (urlDoc.oneClickDestroy && !urlDoc.clicked) {
-      urlDoc.clicked = true;
-      await urlDoc.save();
+      shouldUpdate = true;
     }
 
     // GA tracking
@@ -97,12 +93,21 @@ export const redirectToOriginal = async (req, res) => {
       }
     ).catch(console.error);
 
-    return res.redirect(urlDoc.originalUrl);
+    // Perform redirect first
+    res.redirect(urlDoc.originalUrl);
+
+    // Update clicked status after sending response
+    if (shouldUpdate) {
+      urlDoc.clicked = true;
+      await urlDoc.save();
+    }
+
   } catch (error) {
     console.error(error);
     return res.status(500).send("Server error");
   }
 };
+
 
 export const healthCheck = (req, res) => {
   try {
